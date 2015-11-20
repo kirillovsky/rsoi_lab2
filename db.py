@@ -8,13 +8,25 @@ client = Base('db/client.pdl')
 if client.exists():
     client.open()
 else:
-    client.create('id', 'secret')
+    client.create('secret', 'redirect_uri', 'name')
+
+authorization_code = Base('db/authorization_code.pdl')
+if authorization_code.exists():
+    authorization_code.open()
+else:
+    authorization_code.create('code', 'expire_time')
+
+token = Base('db/token.pdl')
+if token.exists():
+    token.open()
+else:
+    token.create('access', 'expire_time', 'refresh')
 
 user = Base('db/user.pdl')
 if user.exists():
     user.open()
 else:
-    user.create('username', 'password_hash', 'name', 'email', 'phone')
+    user.create('login', 'password_hash', 'name', 'email', 'phone')
 
 food = Base('db/food.pdl')
 if food.exists():

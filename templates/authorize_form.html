@@ -1,10 +1,15 @@
 {% extends "generic_page.html" %}
 
-{% block title %}Register{% endblock %}
+{% block title %}Authorize{% endblock %}
 
 {% block body %}
-  <h1>Register</h1>
+  <h1>Authorize</h1>
+  <p>For application <b>{{client_name}}</b></p>
   <form method="POST">
+    {% if state is not none %}
+        <input name="state" type="hidden" value="{{state}}"></input>
+    {% endif %}
+    <input name="client_id" type="hidden" value="{{client_id}}"></input>
     <table>
       <tbody>
         <tr>
@@ -20,27 +25,9 @@
           </td>
         </tr>  
         <tr>
-          <td style="text-align:right">Name:</td>
-          <td>
-            <input name="name"></input>
-          </td>
-        </tr>  
-        <tr>
-          <td style="text-align:right">eMail:</td>
-          <td>
-            <input name="email" type="email"></input>
-          </td>
-        </tr>  
-        <tr>
-          <td style="text-align:right">Phone:</td>
-          <td>
-            <input name="phone" type="tel"></input>
-          </td>
-        </tr>  
-        <tr>
           <td></td>
           <td style="text-align:right">
-            <input type="submit" value="Register!"></input>
+            <input type="submit" value="Sign in!"></input>
           </td>
         </tr>  
       </tbody>
