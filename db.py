@@ -14,13 +14,13 @@ authorization_code = Base('db/authorization_code.pdl')
 if authorization_code.exists():
     authorization_code.open()
 else:
-    authorization_code.create('code', 'expire_time')
+    authorization_code.create('user_id', 'code', 'expire_time')
 
 token = Base('db/token.pdl')
 if token.exists():
     token.open()
 else:
-    token.create('access', 'expire_time', 'refresh')
+    token.create('user_id', 'access', 'expire_time', 'refresh')
 
 user = Base('db/user.pdl')
 if user.exists():
@@ -38,10 +38,5 @@ order = Base('db/order.pdl')
 if order.exists():
     order.open()
 else:
-    order.create('client_id', 'delivery_location', 'time_placed', 'time_delivered')
+    order.create('user_id', 'food', 'delivery_location', 'time_placed', 'time_delivered')
 
-order_item = Base('db/order_item.pdl')
-if order_item.exists():
-    order_item.open()
-else:
-    order_item.create('order_id', 'food_id', 'food_amount')
