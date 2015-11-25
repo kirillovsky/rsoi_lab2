@@ -224,6 +224,23 @@ def get_food_item(id):
         'Content-Type': 'application/json;charset=UTF-8',        
     }
 
+@app.route('/me', methods=['GET'])
+def get_me():
+    access_token = request.headers.get('Authorization', '')[len('Bearer '):]
+    if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
+        return '', 401 
+
+    user_id = db.token(access=access_token)[0]['user_id']
+
+    return json.dumps({
+        'login': db.user[user_id]['login'],
+        'name': db.user[user_id]['name'],
+        'email': db.user[user_id]['email'],
+        'phone': db.user[user_id]['phone'],
+    }, indent=4), 200, {
+        'Content-Type': 'application/json;charset=UTF-8',        
+    }
+
 @app.route('/orders/', methods=['GET'])
 def get_orders():
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
