@@ -228,7 +228,7 @@ def get_food_item(id):
 def get_me():
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
     if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 401 
+        return '', 403 
 
     user_id = db.token(access=access_token)[0]['user_id']
 
@@ -245,7 +245,7 @@ def get_me():
 def get_orders():
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
     if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 401 
+        return '', 403 
 
     user_id = db.token(access=access_token)[0]['user_id']
 
@@ -286,7 +286,7 @@ def get_orders():
 def get_orders_item(id):
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
     if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 401
+        return '', 403
 
     user_id = db.token(access=access_token)[0]['user_id']
 
@@ -312,7 +312,7 @@ def get_orders_item(id):
 def post_orders():
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
     if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 401
+        return '', 403
 
     user_id = db.token(access=access_token)[0]['user_id']
 
@@ -340,7 +340,7 @@ def post_orders():
 def delete_order_item(id):
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
     if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 401
+        return '', 403
 
     user_id = db.token(access=access_token)[0]['user_id']
 
@@ -360,7 +360,7 @@ def delete_order_item(id):
 def put_order_item(id):
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
     if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 401
+        return '', 403
 
     user_id = db.token(access=access_token)[0]['user_id']
 
