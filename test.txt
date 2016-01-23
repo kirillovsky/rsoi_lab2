@@ -1,0 +1,55 @@
+Аутентификация:
+
+1. http://127.0.0.1:5050/register
+2. http://127.0.0.1:5050/oauth/authorize?response_type=code&state=load&client_id=0 -----> ?code=58390850a0de079604e15feb3a6c65263a246b2d97a063aef6fe84c850302133&state=load
+
+3. 
+	curl -i -X POST "http://127.0.0.1:5050/oauth/token" -d "grant_type=authorization_code&client_id=0&client_secret=TSTSECRET&code=58390850a0de079604e15feb3a6c65263a246b2d97a063aef6fe84c850302133"
+	-----> 
+{"expires_in": 3600, "refresh_token": "b44dddb0b4715640b3e0df641c226b1789d9022d8
+9d873f5dee60df587a39d4c", "access_token": "7284cd35cc13c79d0cb012d283043217fe15f
+fbe9d64f0571a8c3f43ab4bd1ad", "token_type": "bearer"}
+
+	curl -i -X POST "http://127.0.0.1:5050/oauth/token" -d "grant_type=refresh_token&client_id=0&client_secret=TSTSECRET&refresh_token=4b3d7012d7eb7bd673746fbcdbd4f78aa81f2b66f0df3cb042cdfcb9f"
+	
+									CRUD
+#################################################################################################################################################################
+Не требует аутентификации (R):
+1. http://127.0.0.1:5050/ships?page=0&per_page=2
+2. http://127.0.0.1:5050/sailors?page=0&per_page=2
+3. http://127.0.0.1:5050/sailors/1
+4. http://127.0.0.1:5050/ships/1
+
+Требующие аутентификации:
+	Создание объектов (С):
+-------------------------------------------------------------------------
+1. curl -i -H "Content-Type: application/json" -X POST "http://127.0.0.1:5050/ships/" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad" -d "{\"name\":\"TST1\",\"type\":\"TSTTYPE\",\"country\":\"TSTCOUNTRY\"}"
+
+2. curl -i -H "Content-Type: application/json" -X PUT "http://127.0.0.1:5050/sailors/" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad" -d "{\"firstname\":\"IVAN\",\"lastname\":\"IVANOV\",\"speciality\":\"TSTSPEC\",\"hiredate\":\"2013-09-28 20:30:55.78200\",\"ship_empl\":\"1\"}"
+-------------------------------------------------------------------------
+
+	Удаление объектов (D):
+-------------------------------------------------------------------------
+1. curl -i -X DELETE "http://127.0.0.1:5050/sailors/1" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad"
+
+2. curl -i -X DELETE "http://127.0.0.1:5050/ships/4" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad"
+-------------------------------------------------------------------------
+
+	Модификация объектов (D):
+-------------------------------------------------------------------------
+1. curl -i -H "Content-Type: application/json" -X PATCH "http://127.0.0.1:5050/ships/0" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad" -d "{\"name\":\"MOD1\",\"type\":\"MODTYPE\",\"country\":\"MODCOUNTRY\"}"
+
+2. curl -i -H "Content-Type: application/json" -X POST "http://127.0.0.1:5050/sailors/0" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad" -d "{\"firstname\":\"IVAN\",\"lastname\":\"IVANOV\",\"speciality\":\"MOD1\",\"hiredate\":\"2013-09-28 20:30:55.78200\",\"ship_empl\":\"0\"}"
+
+3. curl -i -H "Content-Type: application/json" -X PUT "http://127.0.0.1:5050/sailors/5" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad" -d "{\"firstname\":\"SERGEY\",\"lastname\":\"IVANOV\",\"speciality\":\"MOD1\",\"hiredate\":\"2013-09-28 20:30:55.78200\",\"ship_empl\":\"0\"}"
+-------------------------------------------------------------------------
+
+#################################################################################################################################################################	
+	Информация о пользователе:
+-------------------------------------------------------------------------
+1. curl -i -X GET "http://127.0.0.1:5050/me" -H "Authorization: Bearer 7284cd35cc13c79d0cb012d283043217fe15ffbe9d64f0571a8c3f43ab4bd1ad"
+-------------------------------------------------------------------------
+
+	
+	
+

@@ -1,9 +1,11 @@
+import traceback
 from hashlib import sha256
 from uuid import uuid4
 from datetime import datetime, timedelta
 import json
 import math
 
+import sys
 from flask import Flask \
                 , render_template \
                 , redirect \
@@ -12,15 +14,19 @@ from flask import Flask \
 
 app = Flask(__name__)
 
-import db
+
+import db_load_or_install
+
 
 @app.route('/', methods=['GET'])
 def index():
     return redirect(url_for('register_form'))
 
+
 @app.route('/register', methods=['GET'])
 def register_form():
     return render_template('register_form.html')
+
     
 @app.route('/register', methods=['POST'])
 def register():
@@ -36,17 +42,18 @@ def register():
     email = request.form['email'] or None
     phone = request.form['phone'] or None
 
-    if db.user(login=login):
+    if db_load_or_install.user(login=login):
         return render_template('register_fail.html', reason='User already exists.'.format(login))
 
-    db.user.insert(login=login,
+    db_load_or_install.user.insert(login=login,
                    password_hash=sha256(password.encode('UTF-8')).digest(),
                    name=name,
                    email=email,
                    phone=phone)
-    db.user.commit()
+    db_load_or_install.user.commit()
 
     return render_template('register_ok.html', login=request.form['login'])
+
 
 @app.route('/oauth/authorize', methods=['GET'])
 def authorize_form():
@@ -60,19 +67,20 @@ def authorize_form():
         client_id = int(client_id)
     except:
         client_id = None
-    if client_id not in db.client:
+    if not client_id is None and client_id not in db_load_or_install.client:
         return render_template('authorize_fail.html', reason='client_id is invalid.')
 
     if response_type is None:
-        return redirect(db.client[client_id]['redirect_uri'] + '?error=invalid_request' +
+        return redirect(db_load_or_install.client[client_id]['redirect_uri'] + '?error=invalid_request' +
                                                               ('' if state is None else '&state=' + state), code=302)
     if response_type != 'code':
-        return redirect(db.client[client_id]['redirect_uri'] + '?error=unsupported_response_type' +
+        return redirect(db_load_or_install.client[client_id]['redirect_uri'] + '?error=unsupported_response_type' +
                                                               ('' if state is None else '&state=' + state), code=302)
 
     return render_template('authorize_form.html', state=state,
                                                   client_id=client_id,
-                                                  client_name=db.client[client_id]['name'])
+                                                  client_name=db_load_or_install.client[client_id]['name'])
+
 
 @app.route('/oauth/authorize', methods=['POST'])
 def authorize():
@@ -81,18 +89,19 @@ def authorize():
     password = request.form.get('password')
     state = request.form.get('state', None)
 
-    if not db.user(login=login):
-        return redirect(db.client[client_id]['redirect_uri'] + '?error=access_denied' + ('' if state is None else '&state=' + state), code=302)
-    if db.user(login=login)[0]['password_hash'] != sha256(password.encode('UTF-8')).digest():
-        return redirect(db.client[client_id]['redirect_uri'] + '?error=access_denied' + ('' if state is None else '&state=' + state), code=302)
+    if not db_load_or_install.user(login=login):
+        return redirect(db_load_or_install.client[client_id]['redirect_uri'] + '?error=access_denied' + ('' if state is None else '&state=' + state), code=302)
+    if db_load_or_install.user(login=login)[0]['password_hash'] != sha256(password.encode('UTF-8')).digest():
+        return redirect(db_load_or_install.client[client_id]['redirect_uri'] + '?error=access_denied' + ('' if state is None else '&state=' + state), code=302)
 
-    code=sha256(str(uuid4()).encode('UTF-8')).hexdigest()
-    db.authorization_code.insert(user_id=db.user(login=login)[0]['__id__'],
+    code = sha256(str(uuid4()).encode('UTF-8')).hexdigest()
+    db_load_or_install.authorization_code.insert(user_id=db_load_or_install.user(login=login)[0]['__id__'],
                                  code=code,
                                  expire_time=datetime.now() + timedelta(minutes=10))
-    db.authorization_code.commit()
+    db_load_or_install.authorization_code.commit()
 
-    return redirect(db.client[client_id]['redirect_uri'] + '?code=' + code + ('' if state is None else '&state=' + state), code=302)
+    return redirect(db_load_or_install.client[client_id]['redirect_uri'] + '?code=' + code + ('' if state is None else '&state=' + state), code=302)
+
 
 @app.route('/oauth/token', methods=['POST'])
 def token():
@@ -109,7 +118,7 @@ def token():
         client_id = int(client_id)
     except:
         client_id = None
-    if client_id not in db.client or db.client[client_id]['secret'] != client_secret:
+    if client_id not in db_load_or_install.client or db_load_or_install.client[client_id]['secret'] != client_secret:
         return json.dumps({'error': 'invalid_client'}), 400, {
             'Content-Type': 'application/json;charset=UTF-8',        
         }
@@ -122,15 +131,16 @@ def token():
                 'Content-Type': 'application/json;charset=UTF-8',        
             }
 
-        if not db.authorization_code(code=code) or db.authorization_code(code=code)[0]['expire_time'] < datetime.now():
+        if not db_load_or_install.authorization_code(code=code) or db_load_or_install.authorization_code(code=code)[0]['expire_time'] < datetime.now():
             return json.dumps({'error': 'invalid_grant'}), 400, {
                 'Content-Type': 'application/json;charset=UTF-8',        
             }
 
-        user_id = db.authorization_code(code=code)[0]['user_id']
+        user_id = db_load_or_install.authorization_code(code=code)[0]['user_id']
 
-        db.authorization_code.delete(db.authorization_code(code=code))
-        db.authorization_code.commit()
+        db_load_or_install.authorization_code.delete(db_load_or_install.authorization_code(code=code))
+        db_load_or_install.authorization_code.commit()
+
     elif grant_type == 'refresh_token':
         try:
             refresh_token = request.form.get('refresh_token')
@@ -139,16 +149,17 @@ def token():
                 'Content-Type': 'application/json;charset=UTF-8',        
             }
 
-        if not db.token(refresh=refresh_token):
+        if not db_load_or_install.token(refresh=refresh_token):
             return json.dumps({'error': 'invalid_grant'}), 400, {
                 'Content-Type': 'application/json;charset=UTF-8',        
             }
 
-        user_id = db.token(refresh=refresh_token)[0]['user_id']
+        user_id = db_load_or_install.token(refresh=refresh_token)[0]['user_id']
 
-        db.token.delete(db.token(refresh=refresh_token))
-        db.token.commit()
+        db_load_or_install.token.delete(db_load_or_install.token(refresh=refresh_token))
+        db_load_or_install.token.commit()
     else:
+        traceback.print_exc(file=sys.stdout)
         return json.dumps({'error': 'unsupported_grant_type'}), 400, {
             'Content-Type': 'application/json;charset=UTF-8',        
         }
@@ -156,11 +167,11 @@ def token():
     access_token = sha256(str(uuid4()).encode('UTF-8')).hexdigest()
     expire_time = datetime.now() + timedelta(hours=1)
     refresh_token = sha256(str(uuid4()).encode('UTF-8')).hexdigest()
-    db.token.insert(user_id=user_id,
+    db_load_or_install.token.insert(user_id=user_id,
                     access=access_token,
                     expire_time=expire_time,
                     refresh=refresh_token)
-    db.token.commit()
+    db_load_or_install.token.commit()
 
     return json.dumps({
         'access_token': access_token,
@@ -173,220 +184,315 @@ def token():
         'Pragma': 'no-cache',
     }
 
-@app.route('/food/', methods=['GET'])
-def get_food():
+
+@app.route('/ships/', methods=['GET'])
+def get_ships():
     try:
         per_page = int(request.args.get('per_page', 20))
-        if per_page < 20 or per_page > 100:
+        if per_page <= 0:
             raise Exception()
         page = int(request.args.get('page', 0))
-        if page < 0 or page > len(db.food) // per_page:
+        if page < 0 or page > len(db_load_or_install.sailors) // per_page:
             raise Exception()
     except:
+        traceback.print_exc(file=sys.stdout)
         return '', 400
 
     items = []
-    for i, food in enumerate(db.food):
+    for i, ships in enumerate(db_load_or_install.ships):
         if i < page * per_page:
             continue
         if i >= (page + 1) * per_page:
             break
         items.append({
-            'id': food['__id__'],
-            'name': food['name'],
-            'price': food['price'],
+            'id': ships['__id__'],
+            'name': ships['name'],
+            'country': ships['country'],
         })
 
     return json.dumps({
         'items': items,
         'per_page': per_page,
         'page': page,
-        'page_count': math.ceil(len(db.food) / per_page)
+        'page_count': math.ceil(len(db_load_or_install.ships) / per_page)
     }, indent=4), 200, {
         'Content-Type': 'application/json;charset=UTF-8',        
     }
 
-@app.route('/food/<id>', methods=['GET'])
-def get_food_item(id):
+
+@app.route('/sailors/', methods=['GET'])
+def get_sailors():
     try:
-        id = int(id)
-        if id not in db.food:
+        per_page = int(request.args.get('per_page', 20))
+        if per_page <= 0:
+            raise Exception()
+        page = int(request.args.get('page', 0))
+        if page < 0 or page > len(db_load_or_install.sailors) // per_page:
             raise Exception()
     except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 400
+
+    items = []
+    for i, sailors in enumerate(db_load_or_install.sailors):
+        if i < page * per_page:
+            continue
+        if i >= (page + 1) * per_page:
+            break
+        items.append({
+            'id': sailors['__id__'],
+            'firstname': sailors['firstname'],
+            'lastname': sailors['lastname'],
+            'ship_empl': sailors['ship_empl'],
+        })
+
+    return json.dumps({
+        'items': items,
+        'per_page': per_page,
+        'page': page,
+        'page_count': math.ceil(len(db_load_or_install.sailors) / per_page)
+    }, indent=4), 200, {
+        'Content-Type': 'application/json;charset=UTF-8',
+    }
+
+
+@app.route('/sailors/<id>', methods=['GET'])
+def get_sailor(id):
+    try:
+        id = int(id)
+        if id not in db_load_or_install.sailors:
+            raise Exception()
+    except:
+        traceback.print_exc(file=sys.stdout)
         return '', 404
 
-    food = db.food[id]
+    sailors = db_load_or_install.sailors[id]
     return json.dumps({
-        'id': food['__id__'],
-        'name': food['name'],
-        'price': food['price'],
+        'id': sailors['__id__'],
+        'firstname': sailors['firstname'],
+        'lastname': sailors['lastname'],
+        'speciality': sailors['speciality'],
+        'hiredate': datetime_to_string(sailors['hiredate']),
+        'ship_empl': sailors['ship_empl']
     }, indent=4), 200, {
         'Content-Type': 'application/json;charset=UTF-8',        
     }
+
+
+@app.route('/ships/<id>', methods=['GET'])
+def get_ship(id):
+    try:
+        id = int(id)
+        if id not in db_load_or_install.sailors:
+            raise Exception()
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 404
+
+    ships = db_load_or_install.ships[id]
+    return json.dumps({
+        'id': ships['__id__'],
+        'name': ships['name'],
+        'type': ships['type'],
+        'country': ships['country']
+    }, indent=4), 200, {
+        'Content-Type': 'application/json;charset=UTF-8',
+    }
+
+
+@app.route('/sailors/<id>', methods=['DELETE'])
+def remove_sailor(id):
+    try:
+        get_access_token(request)
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 403
+    
+    try:
+        id = int(id)
+        if id not in db_load_or_install.sailors:
+            raise Exception()
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 404
+
+    db_load_or_install.sailors.delete(db_load_or_install.sailors[id])
+    db_load_or_install.sailors.commit()
+
+    return '', 200
+
+
+@app.route('/ships/<id>', methods=['DELETE'])
+def remove_ship(id):
+    try:
+        get_access_token(request)
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 403
+    
+    try:
+        id = int(id)
+        if id not in db_load_or_install.ships:
+            raise Exception()
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 404
+
+    db_load_or_install.ships.delete(db_load_or_install.ships[id])
+    db_load_or_install.ships.commit()
+
+    return '', 200
+
+
+@app.route('/sailors/<id>', methods=['PUT', 'PATCH', 'POST'])
+def update_sailor(id):
+    try:
+        get_access_token(request)
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 403
+    
+    try:
+        id = int(id)
+        if id not in db_load_or_install.sailors:
+            raise Exception()
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 404
+
+    try:
+        sailor = request.json
+
+        if int(sailor['ship_empl']) not in db_load_or_install.ships:
+            raise Exception()
+
+        hiredate = string_to_datetime(sailor['hiredate'])
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 400
+
+    db_load_or_install.sailors.update(db_load_or_install.sailors[id], firstname=sailor['firstname'],
+                                        lastname=sailor['lastname'], speciality=sailor['speciality'],
+                                        hiredate=hiredate, ship_empl=int(sailor['ship_empl']))
+    db_load_or_install.sailors.commit()
+
+    return '', 200
+
+
+@app.route('/ships/<id>', methods=['PUT', 'PATCH', 'POST'])
+def update_ship(id):
+    try:
+        get_access_token(request)
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 403
+    
+    try:
+        id = int(id)
+        if id not in db_load_or_install.ships:
+            raise Exception()
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 404
+
+    try:
+        ships = request.json
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 400
+
+    db_load_or_install.ships.update(db_load_or_install.ships[id], name=ships['name'],
+                                    type=ships['type'], country=ships['country'])
+    db_load_or_install.ships.commit()
+
+    return '', 200
+
+
+@app.route('/ships/', methods=['POST'])
+def insert_ship():
+    try:
+        get_access_token(request)
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 403
+    
+    try:
+        ships = request.json
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 400
+
+    id = db_load_or_install.ships.insert(name=ships['name'], type=ships['type'],
+                                         country=ships['country'])
+    db_load_or_install.ships.commit()
+
+    return '', 201, {
+        'Location': '/ships/{}'.format(id)
+    }
+
+
+@app.route('/sailors/', methods=['POST'])
+def insert_sailor():
+    try:
+        get_access_token(request)
+    except:
+        return '', 403
+
+    
+
+    try:
+        sailor = request.json
+
+        if int(sailor['ship_empl']) not in db_load_or_install.sailors:
+            raise Exception()
+
+        hiredate = string_to_datetime(sailor['hiredate'])
+    except:
+        traceback.print_exc(file=sys.stdout)
+        return '', 400
+
+    id = db_load_or_install.sailors.insert(firstname=sailor['firstname'],
+                                            lastname=sailor['lastname'], speciality=sailor['speciality'],
+                                            hiredate=hiredate, ship_empl=int(sailor['ship_empl']))
+    db_load_or_install.sailors.commit()
+
+    return '', 201, {
+        'Location': '/sailors/{}'.format(id)
+    }
+
 
 @app.route('/me', methods=['GET'])
 def get_me():
-    access_token = request.headers.get('Authorization', '')[len('Bearer '):]
-    if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 403 
+    try:
+        access_token = get_access_token(request)
+    except:
+        return '', 403
 
-    user_id = db.token(access=access_token)[0]['user_id']
+    user_id = db_load_or_install.token(access=access_token)[0]['user_id']
 
     return json.dumps({
-        'login': db.user[user_id]['login'],
-        'name': db.user[user_id]['name'],
-        'email': db.user[user_id]['email'],
-        'phone': db.user[user_id]['phone'],
+        'login': db_load_or_install.user[user_id]['login'],
+        'name': db_load_or_install.user[user_id]['name'],
+        'email': db_load_or_install.user[user_id]['email'],
+        'phone': db_load_or_install.user[user_id]['phone'],
     }, indent=4), 200, {
-        'Content-Type': 'application/json;charset=UTF-8',        
+        'Content-Type': 'application/json;charset=UTF-8'
     }
 
-@app.route('/orders/', methods=['GET'])
-def get_orders():
+
+def string_to_datetime(string_date):
+    return datetime.strptime(string_date, "%Y-%m-%d %H:%M:%S.%f")
+
+
+def datetime_to_string(date_time):
+    return date_time.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
+def get_access_token(request):
     access_token = request.headers.get('Authorization', '')[len('Bearer '):]
-    if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 403 
-
-    user_id = db.token(access=access_token)[0]['user_id']
-
-    try:
-        per_page = int(request.args.get('per_page', 20))
-        if per_page < 20 or per_page > 100:
-            raise Exception()
-        page = int(request.args.get('page', 0))
-        if page < 0 or page > len(db.order(user_id=user_id)) // per_page:
-            raise Exception()
-    except:
-        return '', 400
-
-    items = []
-    for i, order in enumerate(db.order(user_id=user_id)):
-        if i < page * per_page:
-            continue
-        if i >= (page + 1) * per_page:
-            break
-        items.append({
-            'id': order['__id__'],
-            'food': order['food'],
-            'delivery_location': order['delivery_location'],
-            'time_placed': order['time_placed'].isoformat(),
-            'time_delivered': None if order['time_delivered'] is None else order['time_delivered'].isoformat(),
-        })
-
-    return json.dumps({
-        'items': items,
-        'per_page': per_page,
-        'page': page,
-        'page_count': math.ceil(len(db.order) / per_page)
-    }, indent=4), 200, {
-        'Content-Type': 'application/json;charset=UTF-8',        
-    }
-
-@app.route('/orders/<id>', methods=['GET'])
-def get_orders_item(id):
-    access_token = request.headers.get('Authorization', '')[len('Bearer '):]
-    if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 403
-
-    user_id = db.token(access=access_token)[0]['user_id']
-
-    try:
-        id = int(id)
-        if id not in db.order or db.order[id]['user_id'] != user_id:
-            raise Exception()
-    except:
-        return '', 404
-
-    order = db.order[id]
-    return json.dumps({
-        'id': order['__id__'],
-        'food': order['food'],
-        'delivery_location': order['delivery_location'],
-        'time_placed': order['time_placed'].isoformat(),
-        'time_delivered': None if order['time_delivered'] is None else order['time_delivered'].isoformat(),
-    }, indent=4), 200, {
-        'Content-Type': 'application/json;charset=UTF-8',        
-    }
-
-@app.route('/orders/', methods=['POST'])
-def post_orders():
-    access_token = request.headers.get('Authorization', '')[len('Bearer '):]
-    if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 403
-
-    user_id = db.token(access=access_token)[0]['user_id']
-
-    try:
-        order = request.json
-        for food in order['food']:
-            if food['id'] not in db.food or 'amount' not in food:
-                raise Exception()
-        if 'delivery_location' not in order:
-            raise Exception()
-    except:
-        return '', 400
-
-    id = db.order.insert(user_id=user_id,
-                         food=order['food'],
-                         delivery_location=order['delivery_location'],
-                         time_placed=datetime.now())
-    db.order.commit()
-
-    return '', 201, {
-        'Location': '/orders/{}'.format(id)
-    }
-
-@app.route('/orders/<id>', methods=['DELETE'])
-def delete_order_item(id):
-    access_token = request.headers.get('Authorization', '')[len('Bearer '):]
-    if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 403
-
-    user_id = db.token(access=access_token)[0]['user_id']
-
-    try:
-        id = int(id)
-        if id not in db.order or db.order[id]['user_id'] != user_id:
-            raise Exception()
-    except:
-        return '', 404
-
-    db.order.delete(db.order[id])
-    db.order.commit()
-
-    return '', 200
-
-@app.route('/orders/<id>', methods=['PUT'])
-def put_order_item(id):
-    access_token = request.headers.get('Authorization', '')[len('Bearer '):]
-    if not db.token(access=access_token) or db.token(access=access_token)[0]['expire_time'] < datetime.now():
-        return '', 403
-
-    user_id = db.token(access=access_token)[0]['user_id']
-
-    try:
-        id = int(id)
-        if id not in db.order or db.order[id]['user_id'] != user_id:
-            raise Exception()
-    except:
-        return '', 404
-
-    try:
-        order = request.json
-        for food in order['food']:
-            if food['id'] not in db.food or 'amount' not in food:
-                raise Exception()
-        if 'delivery_location' not in order:
-            raise Exception()
-    except:
-        return '', 400
-
-    db.order.update(db.order[id], food=order['food'],
-                                  delivery_location=order['delivery_location'],
-                                  time_placed=datetime.now())
-    db.order.commit()
-
-    return '', 200
+    if not db_load_or_install.token(access=access_token) or db_load_or_install.token(access=access_token)[0]['expire_time'] < datetime.now():
+        raise Exception()
+    return access_token
 
 if __name__ == '__main__':
     app.run(port=5050, debug=True)
